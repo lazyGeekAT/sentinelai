@@ -57,6 +57,9 @@ graph TD
     D["⚡ Rules Engine<br/>Fast Rules"]
     E["🤖 ML Scorer<br/>Trust Score 0-100"]
     F["💾 PostgreSQL Event Store (local Postgres for dev)"]
+    P["📡 Prometheus\n(scrapes /metrics)"]
+    Q["📈 Grafana\n(dashboards & alerts)"]
+    L["🧾 Logging/Tracing\n(Sentry / ELK / Datadog)"]
     
     G["📈 ADMIN DASHBOARD<br/>React + Vite<br/>Live Threat Feed · Trust Map · User Forensics"]
     
@@ -69,6 +72,10 @@ graph TD
     E -->|Logs| F
     E -->|Trust Insights| G
     F -->|Historical Data| G
+    B -->|exposes `/metrics`| P
+    B -->|emits logs & traces (http, structured)| L
+    P -->|visualized & alerted| Q
+    L -->|visualized| Q
 ```
 
 ---
@@ -224,6 +231,45 @@ Local URLs:
 - Grafana: http://localhost:3001
 - Grafana login: `admin` / `admin`
 - Backend metrics target: `http://host.docker.internal:9000/metrics`
+
+Test summary: see [docs/TEST_SUMMARY.md](docs/TEST_SUMMARY.md)
+
+## Monitoring & Logging Integrations
+
+SentinelAI emits Prometheus-format metrics on `/metrics` and structured logs/traces from the FastAPI backend. For production and advanced observability you can integrate one or more of the following:
+
+- **Prometheus + Grafana (local / short-term):** recommended for metrics. Prometheus scrapes `http://<host>:9000/metrics`. Use the included Grafana JSON at `docs/grafana/sentinelai_overview_dashboard.json` to import panels.
+
+- **Sentry (errors & performance tracing):** set `SENTRY_DSN` in your environment and initialize SDK in `backend/main.py`:
+
+```py
+import sentry_sdk
+from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
+
+sentry_sdk.init(dsn=os.getenv('SENTRY_DSN'), traces_sample_rate=0.1)
+app.add_middleware(SentryAsgiMiddleware)
+```
+
+- **Datadog (metrics, traces, logs):** set `DATADOG_AGENT_HOST` and `DD_ENV`, and use the `datadog` Python client or `ddtrace` for APM. For containerized setups, configure the agent to receive traces and metrics.
+
+- **ELK (Elasticsearch / Logstash / Kibana):** send structured JSON logs to Logstash or use filebeat to ship logs to Elasticsearch. Ensure logs are JSON-formatted for better parsability (use Python `structlog` or `logging` JSON formatter).
+
+Environment examples (add to `.env`):
+
+```
+SENTRY_DSN=
+DATADOG_AGENT_HOST=127.0.0.1
+ELK_URL=http://elk-host:9200
+```
+
+## Integrations
+
+Short integration notes for common tooling:
+
+- **Sentry:** capture exceptions & performance traces. Configure `SENTRY_DSN` and set appropriate sampling for production.
+- **Datadog:** install `ddtrace` and configure `DD_SERVICE` / `DD_ENV`. Use the DogStatsD client to push custom metrics from `scorer.py` and `rules.py`.
+- **ELK:** use structured logs and ship via Filebeat or Logstash. Kibana dashboards can complement Grafana dashboards for log-centric investigations.
+
 
 ---
 
