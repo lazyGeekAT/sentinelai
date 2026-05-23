@@ -8,13 +8,15 @@
 
 from dataclasses import dataclass, field
 from typing import List, Optional
+import os
 import re
 
 # ---------------------------------------------------------------------------
 # Disposable / temporary email domain blocklist
 # Source: aggregated from public disposable-email-domains lists
+# Can be extended via DISPOSABLE_DOMAINS_EXTRA env var (comma-separated)
 # ---------------------------------------------------------------------------
-DISPOSABLE_DOMAINS = {
+_DISPOSABLE_CORE = {
     # Classic throwaway services
     "temp.com", "tempmail.com", "tempinbox.com", "tempr.email",
     "mailinator.com", "mailinator2.com",
@@ -44,10 +46,13 @@ DISPOSABLE_DOMAINS = {
     "sofort-mail.de",
 }
 
+_extra = os.getenv("DISPOSABLE_DOMAINS_EXTRA", "")
+DISPOSABLE_DOMAINS = _DISPOSABLE_CORE | ({d.strip().lower() for d in _extra.split(",") if d.strip()} if _extra else set())
+
 # ---------------------------------------------------------------------------
 # Minimum time (seconds) a human is expected to take to fill a form
 # ---------------------------------------------------------------------------
-MIN_REGISTRATION_SECONDS = float(3.0)
+MIN_REGISTRATION_SECONDS = float(os.getenv("MIN_REGISTRATION_SECONDS", "3.0"))
 
 # ---------------------------------------------------------------------------
 # Platform-level registration velocity limit (signups per minute)

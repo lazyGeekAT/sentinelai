@@ -3,7 +3,7 @@
 # Define DB tables here using SQLAlchemy (works with SQLite or PostgreSQL)
 
 from sqlalchemy import (
-    Column, String, Integer, Boolean, DateTime, Text, Float
+    Column, String, Integer, Boolean, DateTime, Text, Float, Index
 )
 from sqlalchemy.orm import declarative_base
 from datetime import datetime
@@ -54,6 +54,12 @@ class Event(Base):
     trust_score_at_time = Column(Integer, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
     metadata_json = Column(Text, nullable=True)  # JSON blob for extra context
+
+    __table_args__ = (
+        Index("idx_events_action_ip", "action", "ip_address"),
+        Index("idx_events_action_ua", "action", "user_agent"),
+        Index("idx_events_action_ts", "action", "timestamp"),
+    )
 
 
 class Alert(Base):

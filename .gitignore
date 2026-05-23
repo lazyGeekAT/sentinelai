@@ -51,4 +51,5 @@ htmlcov/
 
 # Docs
 docs/PLAN.md
-docs/obsolete
+docs/obsoletegraphify-out/
+repomix-output.xml

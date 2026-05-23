@@ -3,11 +3,8 @@ Monitoring and metrics for SentinelAI.
 Provides Prometheus metrics, performance tracking, and event alerting.
 """
 
-from prometheus_client import Counter, Histogram, Gauge
-import time
+from prometheus_client import Counter, Histogram
 import logging
-from typing import Optional
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -93,31 +90,6 @@ db_query_duration = Histogram(
     buckets=(0.001, 0.005, 0.01, 0.05, 0.1, 0.5)
 )
 
-# === GAUGES ===
-# Track current state (values that go up and down)
-
-active_users_online = Gauge(
-    'sentinelai_active_users_online',
-    'Currently active users (estimate based on recent activity)'
-)
-
-users_in_quarantine = Gauge(
-    'sentinelai_users_in_quarantine',
-    'Number of users currently in quarantine'
-)
-
-trust_score_average = Gauge(
-    'sentinelai_trust_score_average',
-    'Average trust score across all users'
-)
-
-rate_limit_remaining = Gauge(
-    'sentinelai_rate_limit_remaining',
-    'Remaining rate limit capacity (per endpoint)',
-    ['endpoint']
-)
-
-
 # === ALERT THRESHOLDS ===
 
 class AlertThreshold:
@@ -139,84 +111,6 @@ class AlertThreshold:
     DB_QUERY_LATENCY_THRESHOLD = 1.0
 
 
-class MetricsCollector:
-    """Centralized metrics collection and alerting."""
-    
-    def __init__(self):
-        self.alert_callbacks = []
-        self.event_log = []
-    
-    def register_alert_callback(self, callback):
-        """Register a callback to be called when an alert is triggered."""
-        self.alert_callbacks.append(callback)
-    
-    def log_event(self, event_type: str, severity: str, message: str, context: dict = None):
-        """Log an event for alerting and auditing."""
-        event = {
-            'timestamp': datetime.utcnow().isoformat(),
-            'type': event_type,
-            'severity': severity,  # info, warning, critical
-            'message': message,
-            'context': context or {},
-        }
-        self.event_log.append(event)
-        
-        # Trigger alert callbacks if critical
-        if severity == 'critical':
-            self._trigger_alert(event)
-        
-        logger.warning(
-            f"[ALERT] {event_type} - {message}",
-            extra={'severity': severity, 'context': context}
-        )
-    
-    def _trigger_alert(self, event: dict):
-        """Execute alert callbacks."""
-        for callback in self.alert_callbacks:
-            try:
-                callback(event)
-            except Exception as e:
-                logger.error(f"Alert callback failed: {str(e)}")
-    
-    def check_failed_login_spike(self, failed_count: int):
-        """Check if failed login attempts exceed threshold."""
-        if failed_count > AlertThreshold.FAILED_LOGIN_ATTEMPTS_THRESHOLD:
-            self.log_event(
-                'AUTH_SPIKE',
-                'critical',
-                f'High failed login rate: {failed_count} in last minute',
-                {'threshold': AlertThreshold.FAILED_LOGIN_ATTEMPTS_THRESHOLD}
-            )
-            return True
-        return False
-    
-    def check_bot_wave(self, registration_count: int):
-        """Check if registrations per minute indicate bot wave."""
-        if registration_count > AlertThreshold.BOT_WAVE_REGISTRATIONS_THRESHOLD:
-            self.log_event(
-                'BOT_WAVE',
-                'critical',
-                f'Bot wave detected: {registration_count} registrations in last minute',
-                {'threshold': AlertThreshold.BOT_WAVE_REGISTRATIONS_THRESHOLD}
-            )
-            return True
-        return False
-    
-    def check_geo_drift_spike(self, geo_drift_count: int):
-        """Check for unusual geo drift patterns."""
-        if geo_drift_count > AlertThreshold.GEO_DRIFT_ALERTS_THRESHOLD:
-            self.log_event(
-                'GEO_DRIFT_SPIKE',
-                'warning',
-                f'Multiple geo drift alerts: {geo_drift_count} in last minute',
-                {'threshold': AlertThreshold.GEO_DRIFT_ALERTS_THRESHOLD}
-            )
-            return True
-        return False
-
-
-# Global metrics collector instance
-metrics = MetricsCollector()
 
 
 def record_request_timing(method: str, endpoint: str, duration: float, status_code: int):

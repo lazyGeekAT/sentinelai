@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 from logging_config import get_logger
 from error_codes import ErrorCode
-from monitoring import metrics, record_auth_event, record_security_rule, record_alert
+from monitoring import record_auth_event, record_security_rule, record_alert
 
 # JWT imports
 from jose import JWTError, jwt
@@ -23,7 +23,6 @@ from typing import Optional
 import base64
 import hmac
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 from starlette.requests import ClientDisconnect
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,11 +33,22 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 # Rate limiter for brute force protection
-limiter = Limiter(key_func=get_remote_address)
+def _rate_limit_key(request: Request) -> str:
+    """Resolve client IP respecting X-Forwarded-For so rate limiting works behind proxies."""
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        forwarded_ip = xff.split(",")[0].strip()
+        if forwarded_ip:
+            return forwarded_ip
+    return request.client.host if request.client else "127.0.0.1"
+
+limiter = Limiter(key_func=_rate_limit_key)
 
 # JWT config
 SECRET_KEY = os.getenv("JWT_SECRET", "your-secret-key-change-in-prod")
 if SECRET_KEY == "your-secret-key-change-in-prod":
+    if os.getenv("ENV", "development") != "development":
+        raise RuntimeError("JWT_SECRET must be set in non-development environments")
     import warnings
     warnings.warn("⚠️  WARNING: JWT_SECRET is using the default value! This is insecure. Set JWT_SECRET environment variable to a random 32+ byte string.")
 ALGORITHM = "HS256"
@@ -64,6 +74,16 @@ class CaptchaChallengeResponse(BaseModel):
     captcha_prompt: str
     user_id: str
     recommendation: str
+
+
+def validate_password(password: str) -> None:
+    """Validate password strength. Raises HTTPException on failure."""
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    if not any(c.isalpha() for c in password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one letter")
+    if not any(c.isdigit() for c in password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one digit")
 
 
 def hash_password(password: str) -> str:
@@ -272,6 +292,8 @@ async def register(request: Request, db: Session = Depends(get_db)):
         except Exception:
             logger.debug('Failed to record registration missing-fields metric')
         raise HTTPException(status_code=400, detail="Missing email or password")
+
+    validate_password(password)
     
     # Check if user exists - don't reveal this to prevent user enumeration
     existing_user = db.query(User).filter(User.email == email).first()
@@ -283,16 +305,16 @@ async def register(request: Request, db: Session = Depends(get_db)):
             logger.debug('Failed to record registration failed metric')
         raise HTTPException(status_code=400, detail="Registration failed. Please try again or contact support.")
     
-    # Parse behavioral payload
+    # Parse behavioral payload — accepts both camelCase (JS SDK) and short form
     beh_data = data.get("behavioralData") or data.get("behavioral") or {}
     behavioral = BehavioralPayload(
         typing_variance_ms=beh_data.get("typing_variance_ms", 150),
         time_to_complete_sec=beh_data.get("time_to_complete_sec", 10),
         mouse_move_count=beh_data.get("mouse_move_count", 20),
         keypress_count=beh_data.get("keypress_count", 20),
-        session_tempo_sec=beh_data.get("session_tempo_sec", 0.0),
-        mouse_entropy_score=beh_data.get("mouse_entropy_score", 0.0),
-        fill_order_score=beh_data.get("fill_order_score", 1.0),
+        session_tempo_sec=beh_data.get("session_tempo_sec"),
+        mouse_entropy_score=beh_data.get("mouse_entropy_score"),
+        fill_order_score=beh_data.get("fill_order_score"),
     )
 
     ip_address = _extract_ip(request, data)

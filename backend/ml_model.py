@@ -71,8 +71,15 @@ def train(training_data_path: str = "../scripts/training_data.csv"):
     )
     model.fit(benign_df.values)
 
-    joblib.dump(model, MODEL_PATH)
-    print(f"Model saved to {MODEL_PATH}")
+    # Compute score range for normalization at inference time
+    train_scores = model.score_samples(benign_df.values)
+    metadata = {
+        "min_score": float(train_scores.min()),
+        "max_score": float(train_scores.max()),
+    }
+
+    joblib.dump({"model": model, "metadata": metadata}, MODEL_PATH)
+    print(f"Model + metadata saved to {MODEL_PATH}")
 
     # Quick sanity check on malicious samples
     malicious_df = df[df["label"] == 1][FEATURE_NAMES]
@@ -82,14 +89,17 @@ def train(training_data_path: str = "../scripts/training_data.csv"):
 
 
 def load_model():
-    """Load the saved model. Returns None if model file doesn't exist yet."""
+    """Load the saved model + metadata. Returns None if model file doesn't exist yet."""
     if not Path(MODEL_PATH).exists():
         print(f"Warning: model file not found at {MODEL_PATH}. Run --train first.")
         return None
-    return joblib.load(MODEL_PATH)
+    data = joblib.load(MODEL_PATH)
+    if isinstance(data, dict) and "model" in data:
+        return data
+    return {"model": data, "metadata": {"min_score": None, "max_score": None}}
 
 
-def predict(feature_vector: np.ndarray, model=None) -> float:
+def predict(feature_vector: np.ndarray, model_data=None) -> float:
     """
     Predict anomaly score for a single feature vector.
     Returns a score in [-1, 0]:
@@ -97,17 +107,30 @@ def predict(feature_vector: np.ndarray, model=None) -> float:
       - Close to -1  → strong anomaly
 
     Returns 0.0 (neutral) if model is not loaded.
+    Accepts either a full model_data dict (with 'model' + 'metadata') or a raw sklearn model.
     """
-    if model is None:
-        model = load_model()
-    if model is None:
+    if model_data is None:
+        model_data = load_model()
+    if model_data is None:
         return 0.0
+
+    if isinstance(model_data, dict) and "model" in model_data:
+        model = model_data["model"]
+        metadata = model_data.get("metadata", {})
+    else:
+        model = model_data
+        metadata = {}
+
+    min_score = metadata.get("min_score")
 
     # score_samples returns negative values; more negative = more anomalous
     raw_score = model.score_samples(feature_vector)[0]
 
-    # Normalize to [-1, 0] range (raw scores are roughly in [-0.5, 0.5])
-    normalized = max(-1.0, min(0.0, raw_score))
+    # Normalize to [-1, 0] using training min_score if available
+    if min_score is not None and min_score < 0:
+        normalized = max(-1.0, raw_score / abs(min_score))
+    else:
+        normalized = max(-1.0, min(0.0, raw_score))
     return normalized
 
 

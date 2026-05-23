@@ -13,10 +13,11 @@ import users
 import alerts
 import analytics
 import scoring
+from ml_model import load_model as load_ml_model
 from database import init_db
 from logging_config import setup_logging, get_logger
 from error_codes import APIError, ValidationError, InternalError
-from monitoring import metrics, record_request_timing, record_error
+from monitoring import record_request_timing, record_error
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -213,7 +214,12 @@ def health():
 
 @app.on_event("startup")
 async def startup_event():
-    """Log application startup."""
+    """Log application startup and preload ML model."""
+    ml = load_ml_model()
+    if ml is not None:
+        logger.info("ML model loaded on startup")
+    else:
+        logger.warning("ML model not found — predictions will return neutral scores")
     logger.info(
         "SentinelAI backend started",
         extra={"version": "1.0.0", "environment": os.getenv("ENV", "development")}

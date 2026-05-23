@@ -16,9 +16,9 @@ class BehavioralPayload:
     time_to_complete_sec: float
     mouse_move_count: int
     keypress_count: int
-    session_tempo_sec: float = 0.0
-    mouse_entropy_score: float = 0.0
-    fill_order_score: float = 1.0
+    session_tempo_sec: Optional[float] = None
+    mouse_entropy_score: Optional[float] = None
+    fill_order_score: Optional[float] = None
 
 
 @dataclass
@@ -56,21 +56,21 @@ def compute_behavioral_penalty(behavioral: BehavioralPayload) -> int:
         penalty += 5  # architecture.md: -5 pts
 
     # Tempo too compressed or too uniform can indicate automation
-    if behavioral.session_tempo_sec and behavioral.session_tempo_sec < 2:
+    if behavioral.session_tempo_sec is not None and behavioral.session_tempo_sec < 2:
         penalty += 5
-    elif behavioral.session_tempo_sec and behavioral.session_tempo_sec < 5:
+    elif behavioral.session_tempo_sec is not None and behavioral.session_tempo_sec < 5:
         penalty += 2
 
     # Low mouse entropy = linear robotic movement
-    if behavioral.mouse_entropy_score and behavioral.mouse_entropy_score < 0.2:
+    if behavioral.mouse_entropy_score is not None and behavioral.mouse_entropy_score < 0.2:
         penalty += 5
-    elif behavioral.mouse_entropy_score and behavioral.mouse_entropy_score < 0.45:
+    elif behavioral.mouse_entropy_score is not None and behavioral.mouse_entropy_score < 0.45:
         penalty += 2
 
     # Odd field-fill ordering or repeated focus patterns
-    if behavioral.fill_order_score and behavioral.fill_order_score < 0.4:
+    if behavioral.fill_order_score is not None and behavioral.fill_order_score < 0.4:
         penalty += 5
-    elif behavioral.fill_order_score and behavioral.fill_order_score < 0.7:
+    elif behavioral.fill_order_score is not None and behavioral.fill_order_score < 0.7:
         penalty += 2
 
     return min(penalty, 25)  # cap at 25
