@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useBehavioral } from '../sdk/behavioral';
 import { Shield, Lock, Mail, ArrowRight } from 'lucide-react';
-import { api, setUserSession } from '../lib/api';
+import { api, setUserSession, isAdmin } from '../lib/api';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -54,9 +54,10 @@ export default function Login() {
         setCaptchaToken(response.data.captcha_token);
         setCaptchaPrompt(response.data.captcha_prompt);
         setInfo('Captcha verification is required.');
-      } else if (response.data.token) {
+      } else       if (response.data.token) {
         setUserSession({ token: response.data.token, userId: response.data.user_id });
-        navigate('/dashboard', { replace: true });
+        const isAdminUser = isAdmin();
+        navigate(isAdminUser ? '/dashboard' : '/events', { replace: true });
       }
     } catch (err) {
       setError(err?.response?.data?.detail || 'Login failed');
@@ -77,7 +78,7 @@ export default function Login() {
       });
 
       setUserSession({ token: response.data.token, userId: response.data.user_id });
-      navigate('/dashboard', { replace: true });
+      navigate(isAdmin() ? '/dashboard' : '/events', { replace: true });
     } catch (err) {
       setError(err?.response?.data?.detail || 'OTP verification failed');
     } finally {
@@ -97,7 +98,7 @@ export default function Login() {
       });
 
       setUserSession({ token: response.data.token, userId: response.data.user_id });
-      navigate('/dashboard', { replace: true });
+      navigate(isAdmin() ? '/dashboard' : '/events', { replace: true });
     } catch (err) {
       setError(err?.response?.data?.detail || 'Captcha verification failed');
     } finally {

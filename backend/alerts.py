@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from database import get_db
 from models import Alert, User
-from auth import get_current_user
+from auth import get_current_user, require_admin
 
 router = APIRouter()
 
@@ -19,7 +19,8 @@ def get_alerts(
     severity: Optional[str] = None,
     since: Optional[datetime] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _admin: User = Depends(require_admin),
 ):
     query = db.query(Alert)
     
@@ -49,7 +50,8 @@ def get_alerts(
 def resolve_alert(
     alert_id: str, 
     db: Session = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _admin: User = Depends(require_admin),
 ):
     alert = db.query(Alert).filter(Alert.id == alert_id).first()
     if not alert:

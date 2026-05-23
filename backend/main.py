@@ -14,7 +14,9 @@ import alerts
 import analytics
 import scoring
 from ml_model import load_model as load_ml_model
-from database import init_db
+from database import init_db, SessionLocal
+from models import User
+from auth import hash_password
 from logging_config import setup_logging, get_logger
 from error_codes import APIError, ValidationError, InternalError
 from monitoring import record_request_timing, record_error
@@ -275,12 +277,33 @@ def health():
 
 @app.on_event("startup")
 async def startup_event():
-    """Log application startup and preload ML model."""
+    """Log application startup, preload ML model, seed admin account."""
     ml = load_ml_model()
     if ml is not None:
         logger.info("ML model loaded on startup")
     else:
         logger.warning("ML model not found — predictions will return neutral scores")
+
+    db = SessionLocal()
+    try:
+        admin_email = os.getenv("ADMIN_EMAIL", "admin@sentinelai.dev")
+        existing = db.query(User).filter(User.email == admin_email).first()
+        if not existing:
+            admin = User(
+                email=admin_email,
+                password_hash=hash_password(os.getenv("ADMIN_PASSWORD", "Admin@2024")),
+                is_admin=True,
+                trust_score=100,
+                status="active",
+            )
+            db.add(admin)
+            db.commit()
+            logger.info("Admin account seeded", extra={"email": admin_email})
+    except Exception:
+        logger.exception("Failed to seed admin account")
+    finally:
+        db.close()
+
     logger.info(
         "SentinelAI backend started",
         extra={"version": "1.0.0", "environment": os.getenv("ENV", "development")}

@@ -203,13 +203,18 @@ async def _safe_read_json(request: Request) -> dict:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
 
-def create_access_token(user_id: str, expires_delta: timedelta = None) -> str:
+def create_access_token(user: User, expires_delta: timedelta = None) -> str:
     """Create a JWT access token for the user."""
     if expires_delta is None:
         expires_delta = timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     
     expire = datetime.utcnow() + expires_delta
-    to_encode = {"sub": user_id, "exp": expire}
+    to_encode = {
+        "sub": user.id,
+        "email": user.email,
+        "is_admin": user.is_admin,
+        "exp": expire,
+    }
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
@@ -279,6 +284,14 @@ def get_current_user(authorization: Optional[str] = Header(None), db: Session = 
         raise HTTPException(status_code=401, detail="User not found")
     
     return user
+
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency that blocks non-admin users from admin routes."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Access denied: admin privileges required")
+    return current_user
+
 
 @limiter.limit("5/minute")  # Max 5 registration attempts per IP per minute
 @router.post("/register")
@@ -484,7 +497,7 @@ async def login(request: Request, db: Session = Depends(get_db)):
     db.commit()
     
     # Generate JWT token
-    access_token = create_access_token(user.id)
+    access_token = create_access_token(user)
     
     # Determine action based on recommendation (progressive auth policy)
     # allow (>70): smooth login, otp (40-70): OTP challenge, captcha (20-39): captcha challenge, quarantine (<20): block + alert
@@ -592,7 +605,7 @@ async def verify_captcha(request: Request, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    access_token = create_access_token(user.id)
+    access_token = create_access_token(user)
 
     event = Event(
         user_id=user.id,
@@ -706,7 +719,7 @@ async def verify_otp(request: Request, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=400, detail="User not found")
     
-    access_token = create_access_token(user.id)
+    access_token = create_access_token(user)
 
     event = Event(
         user_id=user.id,

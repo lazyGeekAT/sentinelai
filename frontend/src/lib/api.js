@@ -37,6 +37,17 @@ export function clearUserSession() {
   localStorage.removeItem('sentinelai_user_id')
 }
 
+export function isAdmin() {
+  const token = getAuthToken()
+  if (!token) return false
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return payload.is_admin === true
+  } catch {
+    return false
+  }
+}
+
 api.interceptors.request.use((config) => {
   const token = getAuthToken()
   if (token) {

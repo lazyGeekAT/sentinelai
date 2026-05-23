@@ -4,7 +4,8 @@ import Login from './auth/Login'
 import Register from './auth/Register'
 import Dashboard from './dashboard/Dashboard'
 import UserTimeline from './dashboard/UserTimeline'
-import { getAuthToken } from './lib/api'
+import AdminGuard from './dashboard/AdminGuard'
+import { getAuthToken, isAdmin } from './lib/api'
 import { useNavigate, useParams } from 'react-router-dom'
 
 function ProtectedRoute({ children }) {
@@ -17,27 +18,46 @@ function UserTimelineRoute() {
 
   return (
     <ProtectedRoute>
-      <UserTimeline
-        mode="page"
-        userId={userId}
-        onClose={() => navigate('/dashboard', { replace: true })}
-      />
+      <AdminGuard>
+        <UserTimeline
+          mode="page"
+          userId={userId}
+          onClose={() => navigate('/dashboard', { replace: true })}
+        />
+      </AdminGuard>
     </ProtectedRoute>
   )
+}
+
+function RootRedirect() {
+  if (!getAuthToken()) return <Navigate to="/login" replace />
+  return isAdmin() ? <Navigate to="/dashboard" replace /> : <Navigate to="/events" replace />
 }
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route
+          path="/events"
+          element={
+            <ProtectedRoute>
+              <div className="min-h-screen bg-gray-900 flex items-center justify-center text-gray-400">
+                Event Platform — under construction
+              </div>
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/dashboard"
           element={
             <ProtectedRoute>
-              <Dashboard />
+              <AdminGuard>
+                <Dashboard />
+              </AdminGuard>
             </ProtectedRoute>
           }
         />

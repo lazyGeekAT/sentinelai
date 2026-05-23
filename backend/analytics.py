@@ -5,12 +5,12 @@ from typing import Optional
 
 from database import get_db
 from models import User, Alert, Event
-from auth import get_current_user
+from auth import get_current_user, require_admin
 
 router = APIRouter()
 
 @router.get("/summary")
-def get_summary(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_summary(db: Session = Depends(get_db), current_user: User = Depends(get_current_user), _admin: User = Depends(require_admin)):
     total_users = db.query(User).count()
     
     today = datetime.utcnow().date()
@@ -38,7 +38,8 @@ def velocity(
     window: str = "1h",
     bucket: str = "1min",
     db: Session = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _admin: User = Depends(require_admin),
 ):
     # window can be 1h, 6h, 24h
     now = datetime.utcnow()
@@ -71,7 +72,7 @@ def velocity(
     }
 
 @router.get("/trust-distribution")
-def trust_dist(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def trust_dist(db: Session = Depends(get_db), current_user: User = Depends(get_current_user), _admin: User = Depends(require_admin)):
     users = db.query(User).all()
     
     bands = [

@@ -6,7 +6,7 @@ import json
 
 from database import get_db
 from models import User, Event
-from auth import get_current_user
+from auth import get_current_user, require_admin
 
 router = APIRouter()
 
@@ -21,7 +21,8 @@ def get_users(
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _admin: User = Depends(require_admin),
 ):
     query = db.query(User)
     
@@ -53,7 +54,7 @@ def get_users(
     }
 
 @router.get("/{user_id}")
-def get_user(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_user(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), _admin: User = Depends(require_admin)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -75,7 +76,7 @@ def get_user(user_id: str, db: Session = Depends(get_db), current_user: User = D
     }
 
 @router.get("/{user_id}/timeline")
-def get_user_timeline(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_user_timeline(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), _admin: User = Depends(require_admin)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -129,7 +130,7 @@ def _describe_event(action: str, metadata_json: Optional[str]) -> str:
     return action.replace("_", " ").title()
 
 @router.patch("/{user_id}/status")
-def update_user_status(user_id: str, req: StatusUpdateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def update_user_status(user_id: str, req: StatusUpdateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), _admin: User = Depends(require_admin)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
